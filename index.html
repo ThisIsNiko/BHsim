@@ -147,13 +147,13 @@
         for (int x=-1; x<=1; x++) for (int y=-1; y<=1; y++) for (int z=-1; z<=1; z++) {
           vec3 c = cell + vec3(float(x), float(y), float(z));
           float n = hash13(c);
-          if (n > 0.972) {
+          if (n > 0.965) {
             vec3 rp = c + vec3(hash13(c+1.0), hash13(c+2.0), hash13(c+3.0));
             float dist = length(p-rp);
             float size = mix(0.08, 0.65, hash13(c+7.3));
             float i = exp(-dist*dist/size);
             float temp = mix(2200.0, 28000.0, hash13(c+13.0));
-            float intensity = mix(0.7, 4.6, hash13(c+9.0));
+            float intensity = mix(1.4, 7.5, hash13(c+9.0));
             col += blackbody(temp) * i * intensity;
           }
         }
@@ -161,14 +161,14 @@
         float nebulaA = noise3(normalize(d) * 8.0 + uSeed * 0.4);
         float nebulaB = noise3(normalize(d) * 19.0 - uSeed * 0.25);
         float neb = smoothstep(0.60, 0.96, nebulaA * 0.75 + nebulaB * 0.45);
-        col += vec3(0.06, 0.06, 0.10) * band;
-        col += vec3(0.10, 0.05, 0.14) * neb * 0.10;
+        col += vec3(0.04, 0.04, 0.07) * band;
+        col += vec3(0.09, 0.04, 0.12) * neb * 0.06;
         return col;
       }
 
       vec3 diskEmission(vec3 p, vec3 rayDir, float rs) {
         float r = length(p.xz);
-        if (abs(p.y) > 0.018 || r < rs*1.6 || r > 6.8) return vec3(0.0);
+        if (abs(p.y) > 0.03 || r < rs*1.15 || r > 10.5) return vec3(0.0);
 
         float v = clamp(sqrt(uMass / max(r, 0.2)), 0.0, 0.82);
         vec3 vel = normalize(vec3(-p.z, 0.0, p.x)) * v;
@@ -177,9 +177,9 @@
         float grav = sqrt(max(0.03, 1.0 - rs / max(r, rs*1.01)));
         float shift = max(0.12, grav / doppler);
 
-        float T = uDiskTemp * shift * mix(1.2, 0.4, smoothstep(rs*1.8, 6.8, r));
+        float T = uDiskTemp * shift * mix(1.35, 0.55, smoothstep(rs*1.3, 10.5, r));
         vec3 bb = blackbody(T);
-        float bright = pow(max(0.001, 1.0/(r*r)), 0.72) * 5.2;
+        float bright = pow(max(0.001, 1.0/(r*r)), 0.63) * 9.2;
         return bb * bright;
       }
 
@@ -241,14 +241,14 @@
 
         vec3 color = trace(ro, rd);
         float impact = length(cross(ro, rd));
-        float shadowRadius = (2.6 * uMass) * (1.0 + 0.35 * abs(ro.y));
-        float shadow = 1.0 - smoothstep(shadowRadius * 0.88, shadowRadius * 1.12, impact);
+        float shadowRadius = (1.45 * uMass) * (1.0 + 0.12 * abs(ro.y));
+        float shadow = 1.0 - smoothstep(shadowRadius * 0.96, shadowRadius * 1.04, impact);
         color *= (1.0 - shadow);
 
-        float vig = smoothstep(1.55, 0.22, length(uv));
+        float vig = smoothstep(1.95, 0.20, length(uv));
         vec3 mapped = tonemap(color*vig);
         float bloom = smoothstep(0.7, 1.0, max(mapped.r, max(mapped.g, mapped.b)));
-        mapped += bloom * vec3(0.015, 0.012, 0.01);
+        mapped += bloom * vec3(0.01, 0.009, 0.007);
         gl_FragColor = vec4(clamp(mapped, 0.0, 1.0), 1.0);
       }
     `;
