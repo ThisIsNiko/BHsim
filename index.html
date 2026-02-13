@@ -141,33 +141,34 @@
       }
 
       vec3 sampleStars(vec3 d) {
-        vec3 p = normalize(d) * 520.0 + uSeed * 21.0;
+        vec3 p = normalize(d) * 560.0 + uSeed * 21.0;
         vec3 cell = floor(p);
         vec3 col = vec3(0.0);
         for (int x=-1; x<=1; x++) for (int y=-1; y<=1; y++) for (int z=-1; z<=1; z++) {
           vec3 c = cell + vec3(float(x), float(y), float(z));
           float n = hash13(c);
-          if (n > 0.985) {
+          if (n > 0.972) {
             vec3 rp = c + vec3(hash13(c+1.0), hash13(c+2.0), hash13(c+3.0));
             float dist = length(p-rp);
-            float size = mix(0.16, 1.35, hash13(c+7.3));
+            float size = mix(0.08, 0.65, hash13(c+7.3));
             float i = exp(-dist*dist/size);
-            float temp = mix(2500.0, 22000.0, hash13(c+13.0));
-            col += blackbody(temp) * i * mix(0.4, 2.6, hash13(c+9.0));
+            float temp = mix(2200.0, 28000.0, hash13(c+13.0));
+            float intensity = mix(0.7, 4.6, hash13(c+9.0));
+            col += blackbody(temp) * i * intensity;
           }
         }
-        float band = pow(max(0.0, 1.0 - abs(d.y + 0.1)), 7.0) * 0.2;
+        float band = pow(max(0.0, 1.0 - abs(d.y + 0.08)), 8.0) * 0.14;
         float nebulaA = noise3(normalize(d) * 8.0 + uSeed * 0.4);
         float nebulaB = noise3(normalize(d) * 19.0 - uSeed * 0.25);
-        float neb = smoothstep(0.52, 0.95, nebulaA * 0.75 + nebulaB * 0.45);
-        col += vec3(0.10, 0.09, 0.16) * band;
-        col += vec3(0.14, 0.07, 0.2) * neb * 0.2;
+        float neb = smoothstep(0.60, 0.96, nebulaA * 0.75 + nebulaB * 0.45);
+        col += vec3(0.06, 0.06, 0.10) * band;
+        col += vec3(0.10, 0.05, 0.14) * neb * 0.10;
         return col;
       }
 
       vec3 diskEmission(vec3 p, vec3 rayDir, float rs) {
         float r = length(p.xz);
-        if (abs(p.y) > 0.025 || r < rs*1.35 || r > 4.2) return vec3(0.0);
+        if (abs(p.y) > 0.018 || r < rs*1.6 || r > 6.8) return vec3(0.0);
 
         float v = clamp(sqrt(uMass / max(r, 0.2)), 0.0, 0.82);
         vec3 vel = normalize(vec3(-p.z, 0.0, p.x)) * v;
@@ -176,9 +177,9 @@
         float grav = sqrt(max(0.03, 1.0 - rs / max(r, rs*1.01)));
         float shift = max(0.12, grav / doppler);
 
-        float T = uDiskTemp * shift * mix(1.35, 0.65, smoothstep(rs*1.45, 4.2, r));
+        float T = uDiskTemp * shift * mix(1.2, 0.4, smoothstep(rs*1.8, 6.8, r));
         vec3 bb = blackbody(T);
-        float bright = pow(max(0.001, 1.0/(r*r)), 0.6) * 2.8;
+        float bright = pow(max(0.001, 1.0/(r*r)), 0.72) * 5.2;
         return bb * bright;
       }
 
@@ -209,9 +210,9 @@
             trans *= 0.75;
           }
 
-          float nearPhoton = smoothstep(photon*1.55, photon*0.82, r);
-          col += vec3(0.003, 0.008, 0.02) * nearPhoton * trans;
-          if (r > 11.0) break;
+          float ring = exp(-pow((r - photon) / (0.09 * photon), 2.0));
+          col += vec3(0.02, 0.015, 0.01) * ring * trans * 0.16;
+          if (r > 14.0) break;
         }
 
         col += trans * sampleStars(dir);
@@ -239,10 +240,15 @@
         vec3 rd = normalize(r*uv.x + u*uv.y + f*1.45);
 
         vec3 color = trace(ro, rd);
-        float vig = smoothstep(1.35, 0.35, length(uv));
+        float impact = length(cross(ro, rd));
+        float shadowRadius = (2.6 * uMass) * (1.0 + 0.35 * abs(ro.y));
+        float shadow = 1.0 - smoothstep(shadowRadius * 0.88, shadowRadius * 1.12, impact);
+        color *= (1.0 - shadow);
+
+        float vig = smoothstep(1.55, 0.22, length(uv));
         vec3 mapped = tonemap(color*vig);
         float bloom = smoothstep(0.7, 1.0, max(mapped.r, max(mapped.g, mapped.b)));
-        mapped += bloom * vec3(0.05, 0.04, 0.08);
+        mapped += bloom * vec3(0.015, 0.012, 0.01);
         gl_FragColor = vec4(clamp(mapped, 0.0, 1.0), 1.0);
       }
     `;
@@ -331,7 +337,7 @@
       seed = [Math.random()*10000, Math.random()*10000, Math.random()*10000];
       camera = [Math.random() * 6.28318, (Math.random() - 0.5) * 0.24];
       renderFrame();
-      statusEl.textContent = 'Generated photorealistic still frame.';
+      statusEl.textContent = 'Generated new realistic black hole still frame.';
     }
 
     function savePng() {
