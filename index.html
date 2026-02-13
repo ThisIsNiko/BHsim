@@ -1,0 +1,388 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Relativistic Black Hole Renderer</title>
+  <style>
+    :root {
+      --bg: #0a0d16;
+      --panel: rgba(18, 22, 34, 0.9);
+      --text: #e9edf7;
+      --accent: #79b8ff;
+      --muted: #a8b4cc;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+      background: radial-gradient(circle at top, #0f1320, var(--bg));
+      color: var(--text);
+      display: grid;
+      place-items: center;
+      padding: 16px;
+    }
+
+    .app {
+      width: min(1200px, 100%);
+      display: grid;
+      gap: 12px;
+    }
+
+    .controls {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: end;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 12px;
+      background: var(--panel);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      backdrop-filter: blur(6px);
+    }
+
+    .control {
+      display: grid;
+      gap: 6px;
+      min-width: 170px;
+    }
+
+    label { color: var(--muted); font-size: 0.86rem; }
+    input, select, button {
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: rgba(8, 12, 20, 0.9);
+      color: var(--text);
+      padding: 9px 10px;
+      font: inherit;
+    }
+
+    button {
+      cursor: pointer;
+      transition: transform 120ms ease, border-color 120ms ease;
+      border-color: rgba(121, 184, 255, 0.4);
+    }
+
+    button:hover {
+      transform: translateY(-1px);
+      border-color: var(--accent);
+    }
+
+    #renderWrap {
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      background: #000;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
+      position: relative;
+    }
+
+    #status {
+      position: absolute;
+      left: 12px;
+      bottom: 12px;
+      font-size: 0.78rem;
+      color: #d7e0f9;
+      background: rgba(2, 6, 16, 0.55);
+      padding: 6px 8px;
+      border-radius: 7px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="controls">
+      <div class="control">
+        <label for="resolution">Render Resolution</label>
+        <select id="resolution">
+          <option value="1920x1080">1080p</option>
+          <option value="2560x1440">1440p</option>
+          <option value="3840x2160" selected>4K (default)</option>
+        </select>
+      </div>
+      <div class="control">
+        <label for="mass">Black Hole Mass (M)</label>
+        <input id="mass" type="range" min="0.6" max="2.2" step="0.01" value="1.2" />
+      </div>
+      <div class="control">
+        <label for="spin">Kerr Spin (a/M)</label>
+        <input id="spin" type="range" min="0" max="0.98" step="0.01" value="0.75" />
+      </div>
+      <div class="control">
+        <label for="diskTemp">Disk Temperature (K)</label>
+        <input id="diskTemp" type="range" min="3500" max="18000" step="100" value="9200" />
+      </div>
+      <button id="generateBtn">Generate</button>
+      <button id="saveBtn">Save PNG</button>
+    </div>
+    <div id="renderWrap">
+      <div id="status">Initializing relativistic ray marcher…</div>
+    </div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'https://unpkg.com/three@0.161.0/build/three.module.js';
+    import { OrbitControls } from 'https://unpkg.com/three@0.161.0/examples/jsm/controls/OrbitControls.js';
+
+    const wrap = document.getElementById('renderWrap');
+    const status = document.getElementById('status');
+    const resolutionEl = document.getElementById('resolution');
+    const massEl = document.getElementById('mass');
+    const spinEl = document.getElementById('spin');
+    const diskTempEl = document.getElementById('diskTemp');
+    const generateBtn = document.getElementById('generateBtn');
+    const saveBtn = document.getElementById('saveBtn');
+
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(54, 16 / 9, 0.01, 100);
+    camera.position.set(0, 0.35, 3.15);
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.35;
+    wrap.appendChild(renderer.domElement);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.target.set(0, 0, 0);
+    controls.minDistance = 1.4;
+    controls.maxDistance = 8;
+
+    let starSeed = new THREE.Vector3(Math.random() * 100, Math.random() * 100, Math.random() * 100);
+
+    const uniforms = {
+      uTime: { value: 0 },
+      uResolution: { value: new THREE.Vector2(1920, 1080) },
+      uMass: { value: parseFloat(massEl.value) },
+      uSpin: { value: parseFloat(spinEl.value) },
+      uDiskTemp: { value: parseFloat(diskTempEl.value) },
+      uCamPos: { value: new THREE.Vector3() },
+      uCamMatrix: { value: new THREE.Matrix3() },
+      uStarSeed: { value: starSeed }
+    };
+
+    const quad = new THREE.Mesh(
+      new THREE.PlaneGeometry(2, 2),
+      new THREE.ShaderMaterial({
+        depthWrite: false,
+        depthTest: false,
+        uniforms,
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = vec4(position.xy, 0.0, 1.0);
+          }
+        `,
+        fragmentShader: `
+          precision highp float;
+          varying vec2 vUv;
+          uniform float uTime;
+          uniform vec2 uResolution;
+          uniform float uMass;
+          uniform float uSpin;
+          uniform float uDiskTemp;
+          uniform vec3 uCamPos;
+          uniform mat3 uCamMatrix;
+          uniform vec3 uStarSeed;
+
+          const float PI = 3.141592653589793;
+          const float C = 1.0;
+          const float G = 1.0;
+
+          float hash13(vec3 p) {
+            p = fract(p * 0.1031);
+            p += dot(p, p.yxz + 19.19);
+            return fract((p.x + p.y) * p.z);
+          }
+
+          vec3 blackbody(float T) {
+            float t = clamp(T, 1000.0, 40000.0) / 100.0;
+            float r = (t <= 66.0) ? 255.0 : 329.698727446 * pow(t - 60.0, -0.1332047592);
+            float g = (t <= 66.0) ? (99.4708025861 * log(t) - 161.1195681661) : (288.1221695283 * pow(t - 60.0, -0.0755148492));
+            float b = (t >= 66.0) ? 255.0 : (t <= 19.0 ? 0.0 : (138.5177312231 * log(t - 10.0) - 305.0447927307));
+            return clamp(vec3(r, g, b) / 255.0, 0.0, 1.0);
+          }
+
+          vec3 sampleStars(vec3 dir) {
+            vec3 p = normalize(dir) * 640.0 + uStarSeed * 17.0;
+            vec3 cell = floor(p);
+            float lum = 0.0;
+            vec3 color = vec3(0.0);
+            for (int x=-1; x<=1; x++) {
+              for (int y=-1; y<=1; y++) {
+                for (int z=-1; z<=1; z++) {
+                  vec3 c = cell + vec3(float(x), float(y), float(z));
+                  float n = hash13(c);
+                  if (n > 0.9845) {
+                    vec3 randPos = c + vec3(hash13(c+1.1), hash13(c+2.2), hash13(c+3.3));
+                    float d = length(p - randPos);
+                    float size = mix(0.18, 1.5, hash13(c + 7.1));
+                    float i = exp(-d * d / size);
+                    float temp = mix(2500.0, 22000.0, hash13(c + 11.8));
+                    color += blackbody(temp) * i * mix(0.4, 2.8, hash13(c + 9.6));
+                    lum += i;
+                  }
+                }
+              }
+            }
+            float milky = pow(max(0.0, 1.0 - abs(dir.y + 0.14)), 7.0) * 0.24;
+            vec3 dust = vec3(0.12, 0.10, 0.18) * milky;
+            return color + dust + vec3(lum * 0.01);
+          }
+
+          vec3 diskEmission(vec3 pos, vec3 rayDir, float rs) {
+            float r = length(pos.xz);
+            float diskHalf = 0.02;
+            if (abs(pos.y) > diskHalf || r < rs * 1.35 || r > 3.6) return vec3(0.0);
+            float kepler = sqrt(G * uMass / max(r, 0.2));
+            float v = clamp(kepler, 0.0, 0.82 * C);
+            vec3 vel = normalize(vec3(-pos.z, 0.0, pos.x)) * v;
+            float gamma = 1.0 / sqrt(1.0 - dot(vel, vel)/(C*C));
+            float doppler = gamma * (1.0 - dot(rayDir, vel)/C);
+            float grav = sqrt(max(0.03, 1.0 - rs / max(r, rs * 1.001)));
+            float shift = max(0.12, grav / max(doppler, 0.08));
+            float T = uDiskTemp * shift * mix(1.3, 0.65, smoothstep(rs*1.4, 3.6, r));
+            vec3 bb = blackbody(T);
+            float brightness = pow(max(0.001, 1.0 / (r*r)), 0.55) * 2.6;
+            return bb * brightness;
+          }
+
+          vec3 trace(vec3 ro, vec3 rd) {
+            float rs = 2.0 * G * uMass / (C*C);
+            float photonSphere = 1.5 * rs;
+            vec3 pos = ro;
+            vec3 dir = normalize(rd);
+            vec3 col = vec3(0.0);
+            float trans = 1.0;
+
+            for (int i = 0; i < 140; i++) {
+              float r = length(pos);
+              if (r < rs * 0.997) return col;
+
+              float h = max(0.01, r * 0.028);
+              vec3 radial = -pos / max(r, 0.0001);
+
+              // Approximate null geodesic bending in Schwarzschild + frame dragging perturbation (Kerr-like).
+              float bend = (1.5 * rs / max(r*r, 0.03));
+              vec3 dragAxis = vec3(0.0, 1.0, 0.0);
+              vec3 frameDrag = cross(dragAxis, dir) * uSpin * rs / max(r*r*r, 0.1);
+              dir = normalize(dir + radial * bend * h + frameDrag * h);
+
+              vec3 prev = pos;
+              pos += dir * h;
+
+              if ((prev.y > 0.0 && pos.y <= 0.0) || (prev.y < 0.0 && pos.y >= 0.0)) {
+                vec3 hit = mix(prev, pos, abs(prev.y) / (abs(prev.y) + abs(pos.y) + 1e-5));
+                vec3 em = diskEmission(hit, dir, rs);
+                col += trans * em;
+                trans *= 0.75;
+              }
+
+              float nearPhoton = smoothstep(photonSphere*1.5, photonSphere*0.8, r);
+              col += vec3(0.003, 0.007, 0.02) * nearPhoton * trans;
+              if (r > 12.0) break;
+            }
+
+            vec3 sky = sampleStars(dir);
+            col += trans * sky;
+            return col;
+          }
+
+          vec3 tonemap(vec3 c) {
+            c = c / (c + vec3(1.0));
+            c = pow(c, vec3(1.0 / 2.2));
+            return c;
+          }
+
+          void main() {
+            vec2 uv = (gl_FragCoord.xy / uResolution) * 2.0 - 1.0;
+            uv.x *= uResolution.x / uResolution.y;
+
+            vec3 dir = normalize(uCamMatrix * vec3(uv, -1.65));
+            vec3 color = trace(uCamPos, dir);
+
+            float vignette = smoothstep(1.35, 0.3, length(uv));
+            color *= vignette;
+            gl_FragColor = vec4(tonemap(color), 1.0);
+          }
+        `
+      })
+    );
+    scene.add(quad);
+
+    function applyResolution() {
+      const [w, h] = resolutionEl.value.split('x').map(Number);
+      uniforms.uResolution.value.set(w, h);
+      renderer.setSize(w, h, false);
+      renderer.domElement.style.width = '100%';
+      renderer.domElement.style.height = '100%';
+      status.textContent = `Rendering ${w}×${h} (real-time relativistic approximation)`;
+    }
+
+    function randomize() {
+      massEl.value = (0.75 + Math.random() * 1.25).toFixed(2);
+      spinEl.value = (Math.random() * 0.97).toFixed(2);
+      diskTempEl.value = String(Math.round(3800 + Math.random() * 12000));
+      starSeed = new THREE.Vector3(Math.random() * 1000, Math.random() * 1000, Math.random() * 1000);
+      uniforms.uStarSeed.value.copy(starSeed);
+      syncUniforms();
+    }
+
+    function syncUniforms() {
+      uniforms.uMass.value = parseFloat(massEl.value);
+      uniforms.uSpin.value = parseFloat(spinEl.value);
+      uniforms.uDiskTemp.value = parseFloat(diskTempEl.value);
+    }
+
+    function savePNG() {
+      const link = document.createElement('a');
+      link.download = `black-hole-${Date.now()}.png`;
+      link.href = renderer.domElement.toDataURL('image/png');
+      link.click();
+    }
+
+    resolutionEl.addEventListener('change', applyResolution);
+    [massEl, spinEl, diskTempEl].forEach(el => el.addEventListener('input', syncUniforms));
+    generateBtn.addEventListener('click', randomize);
+    saveBtn.addEventListener('click', savePNG);
+
+    function updateCameraUniforms() {
+      uniforms.uCamPos.value.copy(camera.position);
+      camera.updateMatrixWorld();
+      const mat = new THREE.Matrix3().setFromMatrix4(camera.matrixWorld);
+      uniforms.uCamMatrix.value.copy(mat);
+    }
+
+    function resizeForLayout() {
+      const rect = wrap.getBoundingClientRect();
+      camera.aspect = rect.width / rect.height;
+      camera.updateProjectionMatrix();
+      renderer.domElement.style.width = `${rect.width}px`;
+      renderer.domElement.style.height = `${rect.height}px`;
+    }
+
+    window.addEventListener('resize', resizeForLayout);
+    applyResolution();
+    resizeForLayout();
+
+    const clock = new THREE.Clock();
+    (function animate() {
+      requestAnimationFrame(animate);
+      controls.autoRotate = true;
+      controls.autoRotateSpeed = 0.25;
+      controls.update();
+      uniforms.uTime.value = clock.getElapsedTime();
+      updateCameraUniforms();
+      renderer.render(scene, camera);
+    })();
+  </script>
+</body>
+</html>
