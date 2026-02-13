@@ -153,7 +153,7 @@
             float size = mix(0.08, 0.65, hash13(c+7.3));
             float i = exp(-dist*dist/size);
             float temp = mix(2200.0, 28000.0, hash13(c+13.0));
-            float intensity = mix(1.4, 7.5, hash13(c+9.0));
+            float intensity = mix(2.8, 12.0, hash13(c+9.0));
             col += blackbody(temp) * i * intensity;
           }
         }
@@ -161,8 +161,12 @@
         float nebulaA = noise3(normalize(d) * 8.0 + uSeed * 0.4);
         float nebulaB = noise3(normalize(d) * 19.0 - uSeed * 0.25);
         float neb = smoothstep(0.60, 0.96, nebulaA * 0.75 + nebulaB * 0.45);
-        col += vec3(0.04, 0.04, 0.07) * band;
-        col += vec3(0.09, 0.04, 0.12) * neb * 0.06;
+        col += vec3(0.02, 0.02, 0.04) * band;
+        col += vec3(0.07, 0.03, 0.10) * neb * 0.04;
+
+        float pin = hash13(normalize(d) * 6000.0 + uSeed * 0.3);
+        float pinMask = smoothstep(0.9975, 1.0, pin);
+        col += vec3(1.0, 0.96, 0.9) * pinMask * 3.2;
         return col;
       }
 
@@ -240,13 +244,15 @@
         vec3 rd = normalize(r*uv.x + u*uv.y + f*1.45);
 
         vec3 color = trace(ro, rd);
+        vec3 bgStars = sampleStars(rd) * 0.45;
+        color += bgStars;
         float impact = length(cross(ro, rd));
-        float shadowRadius = (1.45 * uMass) * (1.0 + 0.12 * abs(ro.y));
+        float shadowRadius = (1.10 * uMass) * (1.0 + 0.08 * abs(ro.y));
         float shadow = 1.0 - smoothstep(shadowRadius * 0.96, shadowRadius * 1.04, impact);
         color *= (1.0 - shadow);
 
         float vig = smoothstep(1.95, 0.20, length(uv));
-        vec3 mapped = tonemap(color*vig);
+        vec3 mapped = tonemap(color*vig*1.15);
         float bloom = smoothstep(0.7, 1.0, max(mapped.r, max(mapped.g, mapped.b)));
         mapped += bloom * vec3(0.01, 0.009, 0.007);
         gl_FragColor = vec4(clamp(mapped, 0.0, 1.0), 1.0);
