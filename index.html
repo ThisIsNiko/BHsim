@@ -3,95 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Relativistic Black Hole Renderer</title>
+  <title>Black Hole Renderer</title>
   <style>
-    :root {
-      --bg: #0a0d16;
-      --panel: rgba(18, 22, 34, 0.9);
-      --text: #e9edf7;
-      --accent: #79b8ff;
-      --muted: #a8b4cc;
-    }
-
+    :root { --bg:#090d18; --panel:#121a2be6; --text:#e9efff; --muted:#a8b4ce; --accent:#7cb7ff; }
     * { box-sizing: border-box; }
     body {
-      margin: 0;
-      min-height: 100vh;
-      font-family: Inter, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-      background: radial-gradient(circle at top, #0f1320, var(--bg));
-      color: var(--text);
-      display: grid;
-      place-items: center;
-      padding: 16px;
+      margin:0; min-height:100vh; padding:14px; color:var(--text);
+      font-family: Inter, Segoe UI, Roboto, Arial, sans-serif;
+      background: radial-gradient(circle at 50% -30%, #162039, var(--bg));
+      display:grid; place-items:center;
     }
-
-    .app {
-      width: min(1200px, 100%);
-      display: grid;
-      gap: 12px;
-    }
-
+    .app { width:min(1200px,100%); display:grid; gap:10px; }
     .controls {
-      display: flex;
-      flex-wrap: wrap;
-      align-items: end;
-      gap: 12px;
-      padding: 14px;
-      border-radius: 12px;
-      background: var(--panel);
-      border: 1px solid rgba(255, 255, 255, 0.08);
-      backdrop-filter: blur(6px);
+      display:flex; flex-wrap:wrap; gap:10px; align-items:end;
+      background:var(--panel); border:1px solid #ffffff1f; border-radius:12px; padding:12px;
     }
-
-    .control {
-      display: grid;
-      gap: 6px;
-      min-width: 170px;
-    }
-
-    label { color: var(--muted); font-size: 0.86rem; }
+    .control { display:grid; gap:5px; min-width:165px; }
+    label { color:var(--muted); font-size:.84rem; }
     input, select, button {
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: rgba(8, 12, 20, 0.9);
-      color: var(--text);
-      padding: 9px 10px;
-      font: inherit;
+      color:var(--text); background:#0b1220; border:1px solid #ffffff22; border-radius:8px; padding:8px 10px; font:inherit;
     }
-
-    button {
-      cursor: pointer;
-      transition: transform 120ms ease, border-color 120ms ease;
-      border-color: rgba(121, 184, 255, 0.4);
-    }
-
-    button:hover {
-      transform: translateY(-1px);
-      border-color: var(--accent);
-    }
-
+    button { cursor:pointer; border-color:#7cb7ff66; }
+    button:hover { border-color:var(--accent); }
     #renderWrap {
-      width: 100%;
-      aspect-ratio: 16 / 9;
-      border-radius: 14px;
-      overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, 0.12);
-      background: #000;
-      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
-      position: relative;
+      width:100%; aspect-ratio:16/9; border-radius:12px; overflow:hidden; position:relative;
+      border:1px solid #ffffff2b; background:#000;
     }
-
+    canvas { width:100%; height:100%; display:block; }
     #status {
-      position: absolute;
-      left: 12px;
-      bottom: 12px;
-      font-size: 0.78rem;
-      color: #d7e0f9;
-      background: rgba(2, 6, 16, 0.55);
-      padding: 6px 8px;
-      border-radius: 7px;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      pointer-events: none;
+      position:absolute; left:10px; bottom:10px; font-size:.76rem;
+      background:#050b17b8; border:1px solid #ffffff22; border-radius:7px; padding:5px 8px;
     }
   </style>
 </head>
@@ -108,30 +49,30 @@
       </div>
       <div class="control">
         <label for="mass">Black Hole Mass (M)</label>
-        <input id="mass" type="range" min="0.6" max="2.2" step="0.01" value="1.2" />
+        <input id="mass" type="range" min="0.6" max="2.2" step="0.01" value="1.25" />
       </div>
       <div class="control">
         <label for="spin">Kerr Spin (a/M)</label>
-        <input id="spin" type="range" min="0" max="0.98" step="0.01" value="0.75" />
+        <input id="spin" type="range" min="0" max="0.98" step="0.01" value="0.72" />
       </div>
       <div class="control">
         <label for="diskTemp">Disk Temperature (K)</label>
-        <input id="diskTemp" type="range" min="3500" max="18000" step="100" value="9200" />
+        <input id="diskTemp" type="range" min="3500" max="18000" step="100" value="9000" />
       </div>
       <button id="generateBtn">Generate</button>
       <button id="saveBtn">Save PNG</button>
     </div>
+
     <div id="renderWrap">
-      <div id="status">Initializing relativistic ray marcher…</div>
+      <canvas id="glCanvas"></canvas>
+      <div id="status">Initializing…</div>
     </div>
   </div>
 
-  <script type="module">
-    import * as THREE from 'https://unpkg.com/three@0.161.0/build/three.module.js';
-    import { OrbitControls } from 'https://unpkg.com/three@0.161.0/examples/jsm/controls/OrbitControls.js';
-
+  <script>
+    const canvas = document.getElementById('glCanvas');
+    const statusEl = document.getElementById('status');
     const wrap = document.getElementById('renderWrap');
-    const status = document.getElementById('status');
     const resolutionEl = document.getElementById('resolution');
     const massEl = document.getElementById('mass');
     const spinEl = document.getElementById('spin');
@@ -139,250 +80,246 @@
     const generateBtn = document.getElementById('generateBtn');
     const saveBtn = document.getElementById('saveBtn');
 
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(54, 16 / 9, 0.01, 100);
-    camera.position.set(0, 0.35, 3.15);
+    const gl = canvas.getContext('webgl', { preserveDrawingBuffer: true, antialias: true });
+    if (!gl) {
+      statusEl.textContent = 'WebGL unavailable on this browser/device.';
+      throw new Error('WebGL not available');
+    }
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.35;
-    wrap.appendChild(renderer.domElement);
+    const vsSrc = `
+      attribute vec2 aPos;
+      varying vec2 vUv;
+      void main() {
+        vUv = aPos * 0.5 + 0.5;
+        gl_Position = vec4(aPos, 0.0, 1.0);
+      }
+    `;
 
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.enableDamping = true;
-    controls.target.set(0, 0, 0);
-    controls.minDistance = 1.4;
-    controls.maxDistance = 8;
+    const fsSrc = `
+      precision highp float;
+      varying vec2 vUv;
+      uniform vec2 uResolution;
+      uniform float uTime;
+      uniform float uMass;
+      uniform float uSpin;
+      uniform float uDiskTemp;
+      uniform vec3 uSeed;
 
-    let starSeed = new THREE.Vector3(Math.random() * 100, Math.random() * 100, Math.random() * 100);
+      float hash13(vec3 p) {
+        p = fract(p * 0.1031);
+        p += dot(p, p.yxz + 19.19);
+        return fract((p.x + p.y) * p.z);
+      }
 
-    const uniforms = {
-      uTime: { value: 0 },
-      uResolution: { value: new THREE.Vector2(1920, 1080) },
-      uMass: { value: parseFloat(massEl.value) },
-      uSpin: { value: parseFloat(spinEl.value) },
-      uDiskTemp: { value: parseFloat(diskTempEl.value) },
-      uCamPos: { value: new THREE.Vector3() },
-      uCamMatrix: { value: new THREE.Matrix3() },
-      uStarSeed: { value: starSeed }
-    };
+      vec3 blackbody(float T) {
+        float t = clamp(T, 1000.0, 40000.0) / 100.0;
+        float r = (t <= 66.0) ? 255.0 : 329.698727446 * pow(t - 60.0, -0.1332047592);
+        float g = (t <= 66.0) ? (99.4708025861 * log(t) - 161.1195681661) : (288.1221695283 * pow(t - 60.0, -0.0755148492));
+        float b = (t >= 66.0) ? 255.0 : (t <= 19.0 ? 0.0 : (138.5177312231 * log(t - 10.0) - 305.0447927307));
+        return clamp(vec3(r, g, b) / 255.0, 0.0, 1.0);
+      }
 
-    const quad = new THREE.Mesh(
-      new THREE.PlaneGeometry(2, 2),
-      new THREE.ShaderMaterial({
-        depthWrite: false,
-        depthTest: false,
-        uniforms,
-        vertexShader: `
-          varying vec2 vUv;
-          void main() {
-            vUv = uv;
-            gl_Position = vec4(position.xy, 0.0, 1.0);
+      vec3 sampleStars(vec3 d) {
+        vec3 p = normalize(d) * 520.0 + uSeed * 21.0;
+        vec3 cell = floor(p);
+        vec3 col = vec3(0.0);
+        for (int x=-1; x<=1; x++) for (int y=-1; y<=1; y++) for (int z=-1; z<=1; z++) {
+          vec3 c = cell + vec3(float(x), float(y), float(z));
+          float n = hash13(c);
+          if (n > 0.985) {
+            vec3 rp = c + vec3(hash13(c+1.0), hash13(c+2.0), hash13(c+3.0));
+            float dist = length(p-rp);
+            float size = mix(0.16, 1.35, hash13(c+7.3));
+            float i = exp(-dist*dist/size);
+            float temp = mix(2500.0, 22000.0, hash13(c+13.0));
+            col += blackbody(temp) * i * mix(0.4, 2.6, hash13(c+9.0));
           }
-        `,
-        fragmentShader: `
-          precision highp float;
-          varying vec2 vUv;
-          uniform float uTime;
-          uniform vec2 uResolution;
-          uniform float uMass;
-          uniform float uSpin;
-          uniform float uDiskTemp;
-          uniform vec3 uCamPos;
-          uniform mat3 uCamMatrix;
-          uniform vec3 uStarSeed;
+        }
+        float band = pow(max(0.0, 1.0 - abs(d.y + 0.1)), 7.0) * 0.2;
+        col += vec3(0.10, 0.09, 0.16) * band;
+        return col;
+      }
 
-          const float PI = 3.141592653589793;
-          const float C = 1.0;
-          const float G = 1.0;
+      vec3 diskEmission(vec3 p, vec3 rayDir, float rs) {
+        float r = length(p.xz);
+        if (abs(p.y) > 0.025 || r < rs*1.35 || r > 4.2) return vec3(0.0);
 
-          float hash13(vec3 p) {
-            p = fract(p * 0.1031);
-            p += dot(p, p.yxz + 19.19);
-            return fract((p.x + p.y) * p.z);
-          }
+        float v = clamp(sqrt(uMass / max(r, 0.2)), 0.0, 0.82);
+        vec3 vel = normalize(vec3(-p.z, 0.0, p.x)) * v;
+        float gamma = 1.0 / sqrt(1.0 - dot(vel,vel));
+        float doppler = max(0.08, gamma * (1.0 - dot(rayDir, vel)));
+        float grav = sqrt(max(0.03, 1.0 - rs / max(r, rs*1.01)));
+        float shift = max(0.12, grav / doppler);
 
-          vec3 blackbody(float T) {
-            float t = clamp(T, 1000.0, 40000.0) / 100.0;
-            float r = (t <= 66.0) ? 255.0 : 329.698727446 * pow(t - 60.0, -0.1332047592);
-            float g = (t <= 66.0) ? (99.4708025861 * log(t) - 161.1195681661) : (288.1221695283 * pow(t - 60.0, -0.0755148492));
-            float b = (t >= 66.0) ? 255.0 : (t <= 19.0 ? 0.0 : (138.5177312231 * log(t - 10.0) - 305.0447927307));
-            return clamp(vec3(r, g, b) / 255.0, 0.0, 1.0);
-          }
+        float T = uDiskTemp * shift * mix(1.35, 0.65, smoothstep(rs*1.45, 4.2, r));
+        vec3 bb = blackbody(T);
+        float bright = pow(max(0.001, 1.0/(r*r)), 0.6) * 2.8;
+        return bb * bright;
+      }
 
-          vec3 sampleStars(vec3 dir) {
-            vec3 p = normalize(dir) * 640.0 + uStarSeed * 17.0;
-            vec3 cell = floor(p);
-            float lum = 0.0;
-            vec3 color = vec3(0.0);
-            for (int x=-1; x<=1; x++) {
-              for (int y=-1; y<=1; y++) {
-                for (int z=-1; z<=1; z++) {
-                  vec3 c = cell + vec3(float(x), float(y), float(z));
-                  float n = hash13(c);
-                  if (n > 0.9845) {
-                    vec3 randPos = c + vec3(hash13(c+1.1), hash13(c+2.2), hash13(c+3.3));
-                    float d = length(p - randPos);
-                    float size = mix(0.18, 1.5, hash13(c + 7.1));
-                    float i = exp(-d * d / size);
-                    float temp = mix(2500.0, 22000.0, hash13(c + 11.8));
-                    color += blackbody(temp) * i * mix(0.4, 2.8, hash13(c + 9.6));
-                    lum += i;
-                  }
-                }
-              }
-            }
-            float milky = pow(max(0.0, 1.0 - abs(dir.y + 0.14)), 7.0) * 0.24;
-            vec3 dust = vec3(0.12, 0.10, 0.18) * milky;
-            return color + dust + vec3(lum * 0.01);
-          }
+      vec3 trace(vec3 ro, vec3 rd) {
+        float rs = 2.0 * uMass;
+        float photon = 1.5 * rs;
+        vec3 pos = ro;
+        vec3 dir = normalize(rd);
+        vec3 col = vec3(0.0);
+        float trans = 1.0;
 
-          vec3 diskEmission(vec3 pos, vec3 rayDir, float rs) {
-            float r = length(pos.xz);
-            float diskHalf = 0.02;
-            if (abs(pos.y) > diskHalf || r < rs * 1.35 || r > 3.6) return vec3(0.0);
-            float kepler = sqrt(G * uMass / max(r, 0.2));
-            float v = clamp(kepler, 0.0, 0.82 * C);
-            vec3 vel = normalize(vec3(-pos.z, 0.0, pos.x)) * v;
-            float gamma = 1.0 / sqrt(1.0 - dot(vel, vel)/(C*C));
-            float doppler = gamma * (1.0 - dot(rayDir, vel)/C);
-            float grav = sqrt(max(0.03, 1.0 - rs / max(r, rs * 1.001)));
-            float shift = max(0.12, grav / max(doppler, 0.08));
-            float T = uDiskTemp * shift * mix(1.3, 0.65, smoothstep(rs*1.4, 3.6, r));
-            vec3 bb = blackbody(T);
-            float brightness = pow(max(0.001, 1.0 / (r*r)), 0.55) * 2.6;
-            return bb * brightness;
+        for (int i=0; i<170; i++) {
+          float r = length(pos);
+          if (r < rs * 0.998) return col;
+
+          float h = max(0.01, r * 0.025);
+          vec3 radial = -pos / max(r, 0.0001);
+          float bend = (1.5 * rs / max(r*r, 0.03));
+          vec3 frameDrag = cross(vec3(0.0,1.0,0.0), dir) * uSpin * rs / max(r*r*r, 0.1);
+          dir = normalize(dir + radial * bend * h + frameDrag * h);
+
+          vec3 prev = pos;
+          pos += dir * h;
+
+          if ((prev.y > 0.0 && pos.y <= 0.0) || (prev.y < 0.0 && pos.y >= 0.0)) {
+            vec3 hit = mix(prev, pos, abs(prev.y)/(abs(prev.y)+abs(pos.y)+1e-5));
+            col += trans * diskEmission(hit, dir, rs);
+            trans *= 0.75;
           }
 
-          vec3 trace(vec3 ro, vec3 rd) {
-            float rs = 2.0 * G * uMass / (C*C);
-            float photonSphere = 1.5 * rs;
-            vec3 pos = ro;
-            vec3 dir = normalize(rd);
-            vec3 col = vec3(0.0);
-            float trans = 1.0;
+          float nearPhoton = smoothstep(photon*1.55, photon*0.82, r);
+          col += vec3(0.003, 0.008, 0.02) * nearPhoton * trans;
+          if (r > 11.0) break;
+        }
 
-            for (int i = 0; i < 140; i++) {
-              float r = length(pos);
-              if (r < rs * 0.997) return col;
+        col += trans * sampleStars(dir);
+        return col;
+      }
 
-              float h = max(0.01, r * 0.028);
-              vec3 radial = -pos / max(r, 0.0001);
+      vec3 tonemap(vec3 c) {
+        c = c / (c + vec3(1.0));
+        c = pow(c, vec3(1.0/2.2));
+        return c;
+      }
 
-              // Approximate null geodesic bending in Schwarzschild + frame dragging perturbation (Kerr-like).
-              float bend = (1.5 * rs / max(r*r, 0.03));
-              vec3 dragAxis = vec3(0.0, 1.0, 0.0);
-              vec3 frameDrag = cross(dragAxis, dir) * uSpin * rs / max(r*r*r, 0.1);
-              dir = normalize(dir + radial * bend * h + frameDrag * h);
+      void main() {
+        vec2 uv = (gl_FragCoord.xy / uResolution) * 2.0 - 1.0;
+        uv.x *= uResolution.x / uResolution.y;
 
-              vec3 prev = pos;
-              pos += dir * h;
+        float t = uTime * 0.12;
+        vec3 ro = vec3(sin(t)*3.0, 0.34 + sin(t*0.7)*0.05, cos(t)*3.0);
+        vec3 ta = vec3(0.0);
+        vec3 f = normalize(ta - ro);
+        vec3 r = normalize(cross(vec3(0.0,1.0,0.0), f));
+        vec3 u = normalize(cross(f, r));
+        vec3 rd = normalize(r*uv.x + u*uv.y + f*1.45);
 
-              if ((prev.y > 0.0 && pos.y <= 0.0) || (prev.y < 0.0 && pos.y >= 0.0)) {
-                vec3 hit = mix(prev, pos, abs(prev.y) / (abs(prev.y) + abs(pos.y) + 1e-5));
-                vec3 em = diskEmission(hit, dir, rs);
-                col += trans * em;
-                trans *= 0.75;
-              }
+        vec3 color = trace(ro, rd);
+        float vig = smoothstep(1.35, 0.35, length(uv));
+        gl_FragColor = vec4(tonemap(color*vig), 1.0);
+      }
+    `;
 
-              float nearPhoton = smoothstep(photonSphere*1.5, photonSphere*0.8, r);
-              col += vec3(0.003, 0.007, 0.02) * nearPhoton * trans;
-              if (r > 12.0) break;
-            }
+    function compile(type, src) {
+      const shader = gl.createShader(type);
+      gl.shaderSource(shader, src);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        const log = gl.getShaderInfoLog(shader);
+        gl.deleteShader(shader);
+        throw new Error(log || 'shader compile error');
+      }
+      return shader;
+    }
 
-            vec3 sky = sampleStars(dir);
-            col += trans * sky;
-            return col;
-          }
+    let program;
+    try {
+      const vs = compile(gl.VERTEX_SHADER, vsSrc);
+      const fs = compile(gl.FRAGMENT_SHADER, fsSrc);
+      program = gl.createProgram();
+      gl.attachShader(program, vs);
+      gl.attachShader(program, fs);
+      gl.linkProgram(program);
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+        throw new Error(gl.getProgramInfoLog(program) || 'program link error');
+      }
+      gl.useProgram(program);
+    } catch (err) {
+      console.error(err);
+      statusEl.textContent = 'Initialization failed: shader error. Open console for details.';
+      throw err;
+    }
 
-          vec3 tonemap(vec3 c) {
-            c = c / (c + vec3(1.0));
-            c = pow(c, vec3(1.0 / 2.2));
-            return c;
-          }
+    const quad = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, quad);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([
+      -1, -1,  1, -1, -1,  1,
+      -1,  1,  1, -1,  1,  1
+    ]), gl.STATIC_DRAW);
 
-          void main() {
-            vec2 uv = (gl_FragCoord.xy / uResolution) * 2.0 - 1.0;
-            uv.x *= uResolution.x / uResolution.y;
+    const aPos = gl.getAttribLocation(program, 'aPos');
+    gl.enableVertexAttribArray(aPos);
+    gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
-            vec3 dir = normalize(uCamMatrix * vec3(uv, -1.65));
-            vec3 color = trace(uCamPos, dir);
+    const uResolution = gl.getUniformLocation(program, 'uResolution');
+    const uTime = gl.getUniformLocation(program, 'uTime');
+    const uMass = gl.getUniformLocation(program, 'uMass');
+    const uSpin = gl.getUniformLocation(program, 'uSpin');
+    const uDiskTemp = gl.getUniformLocation(program, 'uDiskTemp');
+    const uSeed = gl.getUniformLocation(program, 'uSeed');
 
-            float vignette = smoothstep(1.35, 0.3, length(uv));
-            color *= vignette;
-            gl_FragColor = vec4(tonemap(color), 1.0);
-          }
-        `
-      })
-    );
-    scene.add(quad);
+    let seed = [Math.random()*1000, Math.random()*1000, Math.random()*1000];
 
-    function applyResolution() {
+    function setResolutionFromUI() {
       const [w, h] = resolutionEl.value.split('x').map(Number);
-      uniforms.uResolution.value.set(w, h);
-      renderer.setSize(w, h, false);
-      renderer.domElement.style.width = '100%';
-      renderer.domElement.style.height = '100%';
-      status.textContent = `Rendering ${w}×${h} (real-time relativistic approximation)`;
+      canvas.width = w;
+      canvas.height = h;
+      const rect = wrap.getBoundingClientRect();
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+      gl.viewport(0, 0, w, h);
+      statusEl.textContent = `Ready • ${w}×${h}`;
+    }
+
+    function syncUniforms(timeSec = 0) {
+      gl.uniform2f(uResolution, canvas.width, canvas.height);
+      gl.uniform1f(uTime, timeSec);
+      gl.uniform1f(uMass, parseFloat(massEl.value));
+      gl.uniform1f(uSpin, parseFloat(spinEl.value));
+      gl.uniform1f(uDiskTemp, parseFloat(diskTempEl.value));
+      gl.uniform3f(uSeed, seed[0], seed[1], seed[2]);
     }
 
     function randomize() {
-      massEl.value = (0.75 + Math.random() * 1.25).toFixed(2);
-      spinEl.value = (Math.random() * 0.97).toFixed(2);
-      diskTempEl.value = String(Math.round(3800 + Math.random() * 12000));
-      starSeed = new THREE.Vector3(Math.random() * 1000, Math.random() * 1000, Math.random() * 1000);
-      uniforms.uStarSeed.value.copy(starSeed);
-      syncUniforms();
+      massEl.value = (0.7 + Math.random()*1.4).toFixed(2);
+      spinEl.value = (Math.random()*0.97).toFixed(2);
+      diskTempEl.value = String(Math.round(3800 + Math.random()*12000));
+      seed = [Math.random()*10000, Math.random()*10000, Math.random()*10000];
+      statusEl.textContent = 'Generated new system.';
     }
 
-    function syncUniforms() {
-      uniforms.uMass.value = parseFloat(massEl.value);
-      uniforms.uSpin.value = parseFloat(spinEl.value);
-      uniforms.uDiskTemp.value = parseFloat(diskTempEl.value);
+    function savePng() {
+      const a = document.createElement('a');
+      a.download = `black-hole-${Date.now()}.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
     }
 
-    function savePNG() {
-      const link = document.createElement('a');
-      link.download = `black-hole-${Date.now()}.png`;
-      link.href = renderer.domElement.toDataURL('image/png');
-      link.click();
-    }
-
-    resolutionEl.addEventListener('change', applyResolution);
-    [massEl, spinEl, diskTempEl].forEach(el => el.addEventListener('input', syncUniforms));
+    resolutionEl.addEventListener('change', setResolutionFromUI);
+    [massEl, spinEl, diskTempEl].forEach(el => el.addEventListener('input', () => statusEl.textContent = 'Parameters updated.'));
     generateBtn.addEventListener('click', randomize);
-    saveBtn.addEventListener('click', savePNG);
+    saveBtn.addEventListener('click', savePng);
+    window.addEventListener('resize', setResolutionFromUI);
 
-    function updateCameraUniforms() {
-      uniforms.uCamPos.value.copy(camera.position);
-      camera.updateMatrixWorld();
-      const mat = new THREE.Matrix3().setFromMatrix4(camera.matrixWorld);
-      uniforms.uCamMatrix.value.copy(mat);
+    setResolutionFromUI();
+    const t0 = performance.now();
+
+    function frame() {
+      const t = (performance.now() - t0) / 1000;
+      syncUniforms(t);
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
+      requestAnimationFrame(frame);
     }
 
-    function resizeForLayout() {
-      const rect = wrap.getBoundingClientRect();
-      camera.aspect = rect.width / rect.height;
-      camera.updateProjectionMatrix();
-      renderer.domElement.style.width = `${rect.width}px`;
-      renderer.domElement.style.height = `${rect.height}px`;
-    }
-
-    window.addEventListener('resize', resizeForLayout);
-    applyResolution();
-    resizeForLayout();
-
-    const clock = new THREE.Clock();
-    (function animate() {
-      requestAnimationFrame(animate);
-      controls.autoRotate = true;
-      controls.autoRotateSpeed = 0.25;
-      controls.update();
-      uniforms.uTime.value = clock.getElapsedTime();
-      updateCameraUniforms();
-      renderer.render(scene, camera);
-    })();
+    statusEl.textContent = 'Ready.';
+    requestAnimationFrame(frame);
   </script>
 </body>
 </html>
