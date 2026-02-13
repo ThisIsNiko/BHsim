@@ -172,7 +172,7 @@
 
       vec3 diskEmission(vec3 p, vec3 rayDir, float rs) {
         float r = length(p.xz);
-        if (abs(p.y) > 0.03 || r < rs*1.15 || r > 10.5) return vec3(0.0);
+        if (abs(p.y) > 0.055 || r < rs*1.05 || r > 12.0) return vec3(0.0);
 
         float v = clamp(sqrt(uMass / max(r, 0.2)), 0.0, 0.82);
         vec3 vel = normalize(vec3(-p.z, 0.0, p.x)) * v;
@@ -181,9 +181,9 @@
         float grav = sqrt(max(0.03, 1.0 - rs / max(r, rs*1.01)));
         float shift = max(0.12, grav / doppler);
 
-        float T = uDiskTemp * shift * mix(1.35, 0.55, smoothstep(rs*1.3, 10.5, r));
+        float T = uDiskTemp * shift * mix(1.45, 0.65, smoothstep(rs*1.2, 12.0, r));
         vec3 bb = blackbody(T);
-        float bright = pow(max(0.001, 1.0/(r*r)), 0.63) * 9.2;
+        float bright = pow(max(0.001, 1.0/(r*r)), 0.58) * 13.0;
         return bb * bright;
       }
 
@@ -210,12 +210,14 @@
 
           if ((prev.y > 0.0 && pos.y <= 0.0) || (prev.y < 0.0 && pos.y >= 0.0)) {
             vec3 hit = mix(prev, pos, abs(prev.y)/(abs(prev.y)+abs(pos.y)+1e-5));
-            col += trans * diskEmission(hit, dir, rs);
-            trans *= 0.75;
+            col += trans * diskEmission(hit, dir, rs) * 1.3;
+            trans *= 0.82;
           }
 
-          float ring = exp(-pow((r - photon) / (0.09 * photon), 2.0));
-          col += vec3(0.02, 0.015, 0.01) * ring * trans * 0.16;
+          col += diskEmission(pos, dir, rs) * trans * 0.08;
+
+          float ring = exp(-pow((r - photon) / (0.06 * photon), 2.0));
+          col += vec3(0.11, 0.085, 0.06) * ring * trans * 0.55;
           if (r > 14.0) break;
         }
 
@@ -250,6 +252,9 @@
         float shadowRadius = (1.10 * uMass) * (1.0 + 0.08 * abs(ro.y));
         float shadow = 1.0 - smoothstep(shadowRadius * 0.96, shadowRadius * 1.04, impact);
         color *= (1.0 - shadow);
+
+        float ring2 = exp(-pow((impact - 1.52 * uMass) / (0.11 * uMass), 2.0));
+        color += vec3(0.10, 0.08, 0.06) * ring2 * 0.7;
 
         float vig = smoothstep(1.95, 0.20, length(uv));
         vec3 mapped = tonemap(color*vig*1.15);
@@ -336,14 +341,9 @@
       gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 
-    function randomize() {
-      massEl.value = (0.7 + Math.random()*1.4).toFixed(2);
-      spinEl.value = (Math.random()*0.97).toFixed(2);
-      diskTempEl.value = String(Math.round(3800 + Math.random()*12000));
-      seed = [Math.random()*10000, Math.random()*10000, Math.random()*10000];
-      camera = [Math.random() * 6.28318, (Math.random() - 0.5) * 0.24];
+    function generateFrame() {
       renderFrame();
-      statusEl.textContent = 'Generated new realistic black hole still frame.';
+      statusEl.textContent = 'Generated still frame using current parameters.';
     }
 
     function savePng() {
@@ -358,7 +358,7 @@
       renderFrame();
       statusEl.textContent = 'Parameters updated (still frame re-rendered).';
     }));
-    generateBtn.addEventListener('click', randomize);
+    generateBtn.addEventListener('click', generateFrame);
     saveBtn.addEventListener('click', savePng);
     window.addEventListener('resize', setResolutionFromUI);
 
