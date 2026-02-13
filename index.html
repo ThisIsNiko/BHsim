@@ -99,16 +99,37 @@
       precision highp float;
       varying vec2 vUv;
       uniform vec2 uResolution;
-      uniform float uTime;
       uniform float uMass;
       uniform float uSpin;
       uniform float uDiskTemp;
       uniform vec3 uSeed;
+      uniform vec2 uCam;
 
       float hash13(vec3 p) {
         p = fract(p * 0.1031);
         p += dot(p, p.yxz + 19.19);
         return fract((p.x + p.y) * p.z);
+      }
+
+      float noise3(vec3 x) {
+        vec3 i = floor(x);
+        vec3 f = fract(x);
+        f = f * f * (3.0 - 2.0 * f);
+        float n000 = hash13(i + vec3(0.0, 0.0, 0.0));
+        float n100 = hash13(i + vec3(1.0, 0.0, 0.0));
+        float n010 = hash13(i + vec3(0.0, 1.0, 0.0));
+        float n110 = hash13(i + vec3(1.0, 1.0, 0.0));
+        float n001 = hash13(i + vec3(0.0, 0.0, 1.0));
+        float n101 = hash13(i + vec3(1.0, 0.0, 1.0));
+        float n011 = hash13(i + vec3(0.0, 1.0, 1.0));
+        float n111 = hash13(i + vec3(1.0, 1.0, 1.0));
+        float nx00 = mix(n000, n100, f.x);
+        float nx10 = mix(n010, n110, f.x);
+        float nx01 = mix(n001, n101, f.x);
+        float nx11 = mix(n011, n111, f.x);
+        float nxy0 = mix(nx00, nx10, f.y);
+        float nxy1 = mix(nx01, nx11, f.y);
+        return mix(nxy0, nxy1, f.z);
       }
 
       vec3 blackbody(float T) {
@@ -136,7 +157,11 @@
           }
         }
         float band = pow(max(0.0, 1.0 - abs(d.y + 0.1)), 7.0) * 0.2;
+        float nebulaA = noise3(normalize(d) * 8.0 + uSeed * 0.4);
+        float nebulaB = noise3(normalize(d) * 19.0 - uSeed * 0.25);
+        float neb = smoothstep(0.52, 0.95, nebulaA * 0.75 + nebulaB * 0.45);
         col += vec3(0.10, 0.09, 0.16) * band;
+        col += vec3(0.14, 0.07, 0.2) * neb * 0.2;
         return col;
       }
 
@@ -203,8 +228,10 @@
         vec2 uv = (gl_FragCoord.xy / uResolution) * 2.0 - 1.0;
         uv.x *= uResolution.x / uResolution.y;
 
-        float t = uTime * 0.12;
+        float t = uCam.x;
+        float camY = uCam.y;
         vec3 ro = vec3(sin(t)*3.0, 0.34 + sin(t*0.7)*0.05, cos(t)*3.0);
+        ro.y += camY;
         vec3 ta = vec3(0.0);
         vec3 f = normalize(ta - ro);
         vec3 r = normalize(cross(vec3(0.0,1.0,0.0), f));
@@ -213,7 +240,10 @@
 
         vec3 color = trace(ro, rd);
         float vig = smoothstep(1.35, 0.35, length(uv));
-        gl_FragColor = vec4(tonemap(color*vig), 1.0);
+        vec3 mapped = tonemap(color*vig);
+        float bloom = smoothstep(0.7, 1.0, max(mapped.r, max(mapped.g, mapped.b)));
+        mapped += bloom * vec3(0.05, 0.04, 0.08);
+        gl_FragColor = vec4(clamp(mapped, 0.0, 1.0), 1.0);
       }
     `;
 
@@ -259,13 +289,14 @@
     gl.vertexAttribPointer(aPos, 2, gl.FLOAT, false, 0, 0);
 
     const uResolution = gl.getUniformLocation(program, 'uResolution');
-    const uTime = gl.getUniformLocation(program, 'uTime');
     const uMass = gl.getUniformLocation(program, 'uMass');
     const uSpin = gl.getUniformLocation(program, 'uSpin');
     const uDiskTemp = gl.getUniformLocation(program, 'uDiskTemp');
     const uSeed = gl.getUniformLocation(program, 'uSeed');
+    const uCam = gl.getUniformLocation(program, 'uCam');
 
     let seed = [Math.random()*1000, Math.random()*1000, Math.random()*1000];
+    let camera = [Math.random() * 6.28318, (Math.random() - 0.5) * 0.2];
 
     function setResolutionFromUI() {
       const [w, h] = resolutionEl.value.split('x').map(Number);
@@ -275,16 +306,22 @@
       canvas.style.width = `${rect.width}px`;
       canvas.style.height = `${rect.height}px`;
       gl.viewport(0, 0, w, h);
+      renderFrame();
       statusEl.textContent = `Ready • ${w}×${h}`;
     }
 
-    function syncUniforms(timeSec = 0) {
+    function syncUniforms() {
       gl.uniform2f(uResolution, canvas.width, canvas.height);
-      gl.uniform1f(uTime, timeSec);
       gl.uniform1f(uMass, parseFloat(massEl.value));
       gl.uniform1f(uSpin, parseFloat(spinEl.value));
       gl.uniform1f(uDiskTemp, parseFloat(diskTempEl.value));
       gl.uniform3f(uSeed, seed[0], seed[1], seed[2]);
+      gl.uniform2f(uCam, camera[0], camera[1]);
+    }
+
+    function renderFrame() {
+      syncUniforms();
+      gl.drawArrays(gl.TRIANGLES, 0, 6);
     }
 
     function randomize() {
@@ -292,7 +329,9 @@
       spinEl.value = (Math.random()*0.97).toFixed(2);
       diskTempEl.value = String(Math.round(3800 + Math.random()*12000));
       seed = [Math.random()*10000, Math.random()*10000, Math.random()*10000];
-      statusEl.textContent = 'Generated new system.';
+      camera = [Math.random() * 6.28318, (Math.random() - 0.5) * 0.24];
+      renderFrame();
+      statusEl.textContent = 'Generated photorealistic still frame.';
     }
 
     function savePng() {
@@ -303,23 +342,17 @@
     }
 
     resolutionEl.addEventListener('change', setResolutionFromUI);
-    [massEl, spinEl, diskTempEl].forEach(el => el.addEventListener('input', () => statusEl.textContent = 'Parameters updated.'));
+    [massEl, spinEl, diskTempEl].forEach(el => el.addEventListener('input', () => {
+      renderFrame();
+      statusEl.textContent = 'Parameters updated (still frame re-rendered).';
+    }));
     generateBtn.addEventListener('click', randomize);
     saveBtn.addEventListener('click', savePng);
     window.addEventListener('resize', setResolutionFromUI);
 
     setResolutionFromUI();
-    const t0 = performance.now();
-
-    function frame() {
-      const t = (performance.now() - t0) / 1000;
-      syncUniforms(t);
-      gl.drawArrays(gl.TRIANGLES, 0, 6);
-      requestAnimationFrame(frame);
-    }
-
-    statusEl.textContent = 'Ready.';
-    requestAnimationFrame(frame);
+    renderFrame();
+    statusEl.textContent = 'Ready (single still frame mode).';
   </script>
 </body>
 </html>
