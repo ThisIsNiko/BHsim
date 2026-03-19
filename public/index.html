@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BHsim AI Port Bridge</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <main class="app-shell">
+    <section class="panel controls">
+      <h1>BHsim AI Port Bridge</h1>
+      <p class="subtitle">Two-stage AI pseudo-code workflow for porting Minecraft mod/plugin JARs.</p>
+      <form id="uploadForm">
+        <label>
+          <span>JAR File</span>
+          <input type="file" id="jarFile" name="jarFile" accept=".jar" required />
+        </label>
+        <label>
+          <span>Project Type</span>
+          <div class="toggle-row">
+            <label><input type="radio" name="projectType" value="mod" checked /> Mod</label>
+            <label><input type="radio" name="projectType" value="plugin" /> Plugin</label>
+          </div>
+        </label>
+        <label>
+          <span>Source Version</span>
+          <input type="text" id="sourceVersion" name="sourceVersion" placeholder="e.g. 1.12.2" required />
+        </label>
+        <label>
+          <span>Target Version</span>
+          <input type="text" id="targetVersion" name="targetVersion" placeholder="e.g. 1.20.4" required />
+        </label>
+        <button type="submit" id="uploadButton">Upload / Initialize</button>
+      </form>
+
+      <div class="actions">
+        <button id="decompileButton" disabled>1. Decompile</button>
+        <button id="pseudoButton" disabled>2. Midman Pseudo-code</button>
+        <button id="generateButton" disabled>3. Generate Project</button>
+        <button id="compileButton" disabled>4. Compile + Self-Correct</button>
+      </div>
+
+      <div class="run-meta" id="runMeta">No run initialized.</div>
+    </section>
+
+    <section class="panel console-panel">
+      <div class="console-header">
+        <h2>Real-time Console</h2>
+        <button id="clearConsoleButton" class="secondary">Clear</button>
+      </div>
+      <pre id="consoleLog" class="console-log"></pre>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/app.js"></script>
+</body>
+</html>
